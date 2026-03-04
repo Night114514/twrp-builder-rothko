@@ -108,6 +108,40 @@ jobs:
         echo "::group::BoardConfig.mk"
         cat ${{ env.DEVICE_PATH }}/BoardConfig.mk
         echo "::endgroup::"
+        echo "::group::device.mk"
+        cat ${{ env.DEVICE_PATH }}/device.mk
+        echo "::endgroup::"
+      working-directory: workspace
+
+    - name: Fix Missing Build Makefiles
+      run: |
+        echo "::group::Checking and creating missing makefiles"
+        VAB_DIR="build/make/target/product/virtual_ab_ota"
+        mkdir -p "$VAB_DIR"
+        if [ ! -f "$VAB_DIR/launch.mk" ]; then
+          echo "Creating launch.mk"
+          printf 'PRODUCT_VIRTUAL_AB_OTA := true\n' > "$VAB_DIR/launch.mk"
+        fi
+        if [ ! -f "$VAB_DIR/launch_with_vendor_ramdisk.mk" ]; then
+          echo "Creating launch_with_vendor_ramdisk.mk"
+          printf '$(call inherit-product, $(SRC_TARGET_DIR)/product/virtual_ab_ota/launch.mk)\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.userspace.snapshots.enabled=true\n' > "$VAB_DIR/launch_with_vendor_ramdisk.mk"
+        fi
+        if [ ! -f "$VAB_DIR/compression.mk" ]; then
+          echo "Creating compression.mk"
+          printf '$(call inherit-product, $(SRC_TARGET_DIR)/product/virtual_ab_ota/launch_with_vendor_ramdisk.mk)\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.enabled=true\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.userspace.snapshots.enabled=true\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.batch_writes=true\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.io_uring.enabled?=true\nPRODUCT_VIRTUAL_AB_COMPRESSION := true\nPRODUCT_PACKAGES += snapuserd.vendor_ramdisk snapuserd snapuserd.recovery\n' > "$VAB_DIR/compression.mk"
+        fi
+        if [ ! -f "$VAB_DIR/compression_with_xor.mk" ]; then
+          echo "Creating compression_with_xor.mk"
+          printf '$(call inherit-product, $(SRC_TARGET_DIR)/product/virtual_ab_ota/compression.mk)\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.xor.enabled=true\n' > "$VAB_DIR/compression_with_xor.mk"
+        fi
+        if [ ! -f "$VAB_DIR/vabc_features.mk" ]; then
+          echo "Creating vabc_features.mk"
+          printf 'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.enabled=true\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.userspace.snapshots.enabled=true\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.io_uring.enabled=true\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.xor.enabled=true\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.batch_writes=true\n' > "$VAB_DIR/vabc_features.mk"
+        fi
+        echo "::endgroup::"
+        echo "::group::Listing virtual_ab_ota directory"
+        ls -la "$VAB_DIR/"
+        echo "::endgroup::"
       working-directory: workspace
 
     - name: Sync Device Dependencies
