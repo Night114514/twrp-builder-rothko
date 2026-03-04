@@ -1,0 +1,160 @@
+name: Build TWRP for Xiaomi 14T Pro (rothko)
+
+on:
+  workflow_dispatch:
+    inputs:
+      MANIFEST_BRANCH:
+        type: choice
+        description: 'TWRP Manifest Branch'
+        options:
+        - '14.1'
+        - '14'
+        - '12.1'
+        required: true
+        default: '12.1'
+      BUILD_TARGET:
+        type: choice
+        description: 'Build Target Partition'
+        options:
+        - vendor_boot
+        - boot
+        - recovery
+        required: true
+        default: 'vendor_boot'
+
+jobs:
+  build:
+    if: github.event.repository.owner.id == github.event.sender.id
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      DEVICE_TREE_URL: https://github.com/JonesqPacMan/android_device_xiaomi_rothko_twrp
+      DEVICE_TREE_BRANCH: twrp-14.1_a16
+      DEVICE_PATH: device/xiaomi/rothko
+      DEVICE_NAME: rothko
+      DEVICE_MAKEFILE: twrp_rothko
+
+    steps:
+    - name: Display Build Parameters
+      run: |
+        echo "::group::Build Configuration"
+        echo "Manifest Branch: twrp-${{ inputs.MANIFEST_BRANCH }}"
+        echo "Device Tree URL: ${{ env.DEVICE_TREE_URL }}"
+        echo "Device Tree Branch: ${{ env.DEVICE_TREE_BRANCH }}"
+        echo "Device Path: ${{ env.DEVICE_PATH }}"
+        echo "Device Name: ${{ env.DEVICE_NAME }}"
+        echo "Build Target: ${{ inputs.BUILD_TARGET }}.img"
+        echo "::endgroup::"
+
+    - name: Check Out Repository
+      uses: actions/checkout@v4
+
+    - name: Cleanup Workspace
+      uses: rokibhasansagar/slimhub_actions@main
+
+    - name: Set Swap Space
+      uses: pierotofy/set-swap-space@master
+      with:
+        swap-size-gb: 24
+
+    - name: Prepare Build Environment
+      run: |
+        sudo apt update
+        sudo apt -y upgrade
+        sudo apt -y install \
+          gperf gcc-multilib gcc-12-multilib g++-multilib g++-12-multilib \
+          libc6-dev lib32ncurses5-dev x11proto-core-dev libx11-dev tree \
+          lib32z-dev libgl1-mesa-dev libxml2-utils xsltproc bc ccache \
+          lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev \
+          libsdl1.2-dev libxml2 lzop pngcrush schedtool squashfs-tools \
+          imagemagick libbz2-dev lzma ncftp qemu-user-static \
+          libstdc++-12-dev libtinfo5 python3 python-is-python3 zip unzip \
+          bison build-essential curl flex git gnupg libncurses5 \
+          rsync zlib1g-dev
+        sudo add-apt-repository -y universe
+        sudo apt -y install libncurses5
+
+    - name: Install repo tool
+      run: |
+        mkdir -p ~/bin
+        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+        chmod a+x ~/bin/repo
+        sudo ln -sf ~/bin/repo /usr/bin/repo
+
+    - name: Initialize TWRP Manifest
+      run: |
+        mkdir workspace
+        cd workspace
+        git config --global user.name "${GITHUB_ACTOR}"
+        git config --global user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+        repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git -b twrp-${{ inputs.MANIFEST_BRANCH }}
+
+    - name: Repo Sync
+      run: |
+        repo sync -j$(nproc --all) --force-sync
+      working-directory: workspace
+
+    - name: Clone Device Tree
+      run: |
+        git clone ${{ env.DEVICE_TREE_URL }} -b ${{ env.DEVICE_TREE_BRANCH }} ./${{ env.DEVICE_PATH }}
+      working-directory: workspace
+
+    - name: Check Device Tree
+      run: |
+        echo "::group::Device Tree Files"
+        ls -la ${{ env.DEVICE_PATH }}/
+        echo "::endgroup::"
+        echo "::group::BoardConfig.mk"
+        cat ${{ env.DEVICE_PATH }}/BoardConfig.mk
+        echo "::endgroup::"
+      working-directory: workspace
+
+    - name: Sync Device Dependencies
+      run: |
+        source build/envsetup.sh
+        export ALLOW_MISSING_DEPENDENCIES=true
+        lunch ${{ env.DEVICE_MAKEFILE }}-eng
+      working-directory: workspace
+      continue-on-error: true
+
+    - name: Build TWRP Recovery
+      run: |
+        source build/envsetup.sh
+        export ALLOW_MISSING_DEPENDENCIES=true
+        lunch ${{ env.DEVICE_MAKEFILE }}-eng && make $(tr -d _ <<< ${{ inputs.BUILD_TARGET }})image -j$(nproc --all)
+      working-directory: workspace
+
+    - name: List Output Files
+      if: always()
+      run: |
+        echo "::group::Output Files"
+        find out/target/product/${{ env.DEVICE_NAME }}/ -maxdepth 1 -name "*.img" -o -name "*.zip" 2>/dev/null || echo "No output files found"
+        echo "::endgroup::"
+      working-directory: workspace
+
+    - name: Upload to Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          workspace/out/target/product/${{ env.DEVICE_NAME }}/${{ inputs.BUILD_TARGET }}.img
+          workspace/out/target/product/${{ env.DEVICE_NAME }}/obj/PACKAGING/vendor_ramdisk_fragments_intermediates/recovery.*
+          workspace/out/target/product/${{ env.DEVICE_NAME }}/ramdisk-recovery.*
+        name: TWRP-${{ env.DEVICE_NAME }}-${{ github.run_id }}
+        tag_name: ${{ github.run_id }}
+        body: |
+          ## TWRP Recovery for Xiaomi 14T Pro (rothko)
+
+          **Build Info:**
+          - Manifest Branch: twrp-${{ inputs.MANIFEST_BRANCH }}
+          - Device Tree: ${{ env.DEVICE_TREE_URL }}
+          - Device Tree Branch: ${{ env.DEVICE_TREE_BRANCH }}
+          - Build Target: ${{ inputs.BUILD_TARGET }}.img
+          - Build Date: ${{ github.event.repository.updated_at }}
+
+          **Flash Instructions:**
+          ```
+          fastboot flash vendor_boot vendor_boot.img
+          ```
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
