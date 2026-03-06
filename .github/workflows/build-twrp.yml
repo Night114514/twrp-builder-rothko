@@ -60,20 +60,35 @@ jobs:
 
     - name: Prepare Build Environment
       run: |
-        sudo apt update
-        sudo apt -y upgrade
-        sudo apt -y install \
-          gperf gcc-multilib gcc-12-multilib g++-multilib g++-12-multilib \
-          libc6-dev lib32ncurses5-dev x11proto-core-dev libx11-dev tree \
-          lib32z-dev libgl1-mesa-dev libxml2-utils xsltproc bc ccache \
-          lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev \
-          libsdl1.2-dev libxml2 lzop pngcrush schedtool squashfs-tools \
-          imagemagick libbz2-dev lzma ncftp qemu-user-static \
-          libstdc++-12-dev libtinfo5 python3 python-is-python3 zip unzip \
-          bison build-essential curl flex git gnupg libncurses5 \
-          rsync zlib1g-dev
         sudo add-apt-repository -y universe
-        sudo apt -y install libncurses5
+        sudo apt update
+
+        REQUIRED_PACKAGES=(
+          gperf gcc-multilib gcc-12-multilib g++-multilib g++-12-multilib
+          libc6-dev x11proto-core-dev libx11-dev tree
+          lib32z-dev libgl1-mesa-dev libxml2-utils xsltproc bc ccache
+          lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev
+          libsdl1.2-dev libxml2 lzop pngcrush schedtool squashfs-tools
+          imagemagick libbz2-dev lzma ncftp qemu-user-static
+          libstdc++-12-dev python3 python-is-python3 zip unzip
+          bison build-essential curl flex git gnupg rsync zlib1g-dev
+        )
+
+        OPTIONAL_PACKAGES=(
+          lib32ncurses5-dev
+          libtinfo5
+          libncurses5
+        )
+
+        sudo apt -y install "${REQUIRED_PACKAGES[@]}"
+
+        for pkg in "${OPTIONAL_PACKAGES[@]}"; do
+          if apt-cache show "$pkg" >/dev/null 2>&1; then
+            sudo apt -y install "$pkg"
+          else
+            echo "Package $pkg is unavailable on this runner image, skipping"
+          fi
+        done
 
     - name: Install repo tool
       run: |
@@ -163,7 +178,7 @@ jobs:
       if: always()
       run: |
         echo "::group::Output Files"
-        find out/target/product/${{ env.DEVICE_NAME }}/ -maxdepth 1 -name "*.img" -o -name "*.zip" 2>/dev/null || echo "No output files found"
+        find out/target/product/${{ env.DEVICE_NAME }}/ -maxdepth 1 \( -name "*.img" -o -name "*.zip" \) 2>/dev/null || echo "No output files found"
         echo "::endgroup::"
       working-directory: workspace
 
