@@ -18,7 +18,7 @@ Use GitHub Actions to automatically compile TWRP Recovery for the Xiaomi 14T Pro
 
 | Parameter | Value |
 |-----------|-------|
-| **TWRP Manifest** | twrp-12.1 (default, most stable) |
+| **TWRP Manifest** | twrp-14.1 (default, matches current device tree) |
 | **Device Tree** | [JonesqPacMan/android_device_xiaomi_rothko_twrp](https://github.com/JonesqPacMan/android_device_xiaomi_rothko_twrp) |
 | **Device Tree Branch** | twrp-14.1_a16 |
 | **Build Target** | vendor_boot |
@@ -29,7 +29,7 @@ Use GitHub Actions to automatically compile TWRP Recovery for the Xiaomi 14T Pro
 2. Go to **Actions** tab
 3. Click **Build TWRP for Xiaomi 14T Pro (rothko)**
 4. Click **Run workflow**
-5. Select the manifest branch (default: `12.1`)
+5. Select the manifest branch (default: `14.1`)
 6. Select build target (default: `vendor_boot`)
 7. Click **Run workflow** to start the build
 8. Wait for the build to complete (~1-2 hours)
@@ -53,3 +53,9 @@ fastboot reboot recovery
 - [TWRP](https://twrp.me/) - Team Win Recovery Project
 - [JonesqPacMan](https://github.com/JonesqPacMan) - Device tree maintainer
 - [minimal-manifest-twrp](https://github.com/minimal-manifest-twrp) - Minimal TWRP manifest
+
+
+## Common Action Failures
+
+- **`lunch twrp_rothko-eng` fails / missing makefiles**: use manifest branch `14.1` (the device tree branch `twrp-14.1_a16` targets newer TWRP/AOSP trees).
+- **Build passes but Release step fails**: this workflow now validates that `${BUILD_TARGET}.img` exists before uploading; if it still fails, check whether your selected build target is actually produced by the device tree.
