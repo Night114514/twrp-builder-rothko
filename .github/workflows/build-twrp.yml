@@ -182,13 +182,41 @@ jobs:
         echo "::endgroup::"
       working-directory: workspace
 
+    - name: Prepare Release File List
+      id: release_files
+      run: |
+        set -euo pipefail
+        PRODUCT_OUT="workspace/out/target/product/${{ env.DEVICE_NAME }}"
+        TARGET_IMAGE="$PRODUCT_OUT/${{ inputs.BUILD_TARGET }}.img"
+
+        if [ ! -f "$TARGET_IMAGE" ]; then
+          echo "Expected build output not found: $TARGET_IMAGE"
+          exit 1
+        fi
+
+        files=("$TARGET_IMAGE")
+
+        while IFS= read -r -d '' file; do
+          files+=("$file")
+        done < <(find "$PRODUCT_OUT/obj/PACKAGING/vendor_ramdisk_fragments_intermediates" -maxdepth 1 -type f -name 'recovery.*' -print0 2>/dev/null || true)
+
+        while IFS= read -r -d '' file; do
+          files+=("$file")
+        done < <(find "$PRODUCT_OUT" -maxdepth 1 -type f -name 'ramdisk-recovery.*' -print0 2>/dev/null || true)
+
+        {
+          echo 'files<<EOF'
+          printf '%s\n' "${files[@]}"
+          echo 'EOF'
+        } >> "$GITHUB_OUTPUT"
+
+        echo "Release files:"
+        printf ' - %s\n' "${files[@]}"
+
     - name: Upload to Release
       uses: softprops/action-gh-release@v2
       with:
-        files: |
-          workspace/out/target/product/${{ env.DEVICE_NAME }}/${{ inputs.BUILD_TARGET }}.img
-          workspace/out/target/product/${{ env.DEVICE_NAME }}/obj/PACKAGING/vendor_ramdisk_fragments_intermediates/recovery.*
-          workspace/out/target/product/${{ env.DEVICE_NAME }}/ramdisk-recovery.*
+        files: ${{ steps.release_files.outputs.files }}
         name: TWRP-${{ env.DEVICE_NAME }}-${{ github.run_id }}
         tag_name: ${{ github.run_id }}
         body: |
