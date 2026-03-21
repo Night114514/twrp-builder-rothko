@@ -172,10 +172,7 @@ jobs:
         echo "::group::device.mk"
         cat ${{ env.DEVICE_PATH }}/device.mk
         echo "::endgroup::"
-      working-directory: workspace
 
-    - name: Patch Device Tree and Build System
-      run: |
         echo "::group::Patching COMMON_LUNCH_CHOICES for three-part format"
         # ----------------------------------------------------------------
         # Fix 0: Android 14 build system requires <product>-<release>-<variant>
@@ -218,10 +215,7 @@ jobs:
           echo "Patched PRODUCT_TARGET_VNDK_VERSION to current"
         fi
         echo "::endgroup::"
-      working-directory: workspace
 
-    - name: Patch fscrypt_policy for libtar Compatibility
-      run: |
         echo "::group::Checking and creating missing virtual_ab_ota makefiles"
         # ----------------------------------------------------------------
         # Fix 3: Create stub makefiles for virtual_ab_ota that the device
@@ -286,6 +280,10 @@ jobs:
         echo "--- device.mk VNDK line ---"
         grep "PRODUCT_TARGET_VNDK_VERSION" "${{ env.DEVICE_PATH }}/device.mk" || echo "not found"
         echo "::endgroup::"
+      working-directory: workspace
+
+    - name: Patch fscrypt_policy for libtar Compatibility
+      run: |
         echo "::group::Patching TWRP libtar fscrypt compatibility"
         # Fix: TWRP bootable/recovery's libtar uses old fscrypt_policy union typedef.
         # Instead of replacing vold files (which breaks Decrypt.cpp),
