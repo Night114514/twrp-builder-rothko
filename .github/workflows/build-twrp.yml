@@ -57,13 +57,45 @@ jobs:
     - name: Check Out Repository
       uses: actions/checkout@v4
 
+    - name: Free Disk Space
+      run: |
+        echo "::group::Disk space BEFORE cleanup"
+        df -h /
+        echo "::endgroup::"
+
+        echo "Removing unwanted pre-installed software..."
+        sudo rm -rf /usr/local/lib/android          || true  # ~9 GB
+        sudo rm -rf /usr/share/dotnet                || true  # ~1.5 GB
+        sudo rm -rf /usr/local/.ghcup                || true  # ~5.4 GB (Haskell)
+        sudo rm -rf /opt/hostedtoolcache             || true  # ~9 GB
+        sudo rm -rf /usr/share/swift                 || true  # ~1.8 GB
+        sudo rm -rf /usr/share/miniconda             || true  # ~0.6 GB
+        sudo rm -rf /usr/local/share/chromium        || true  # ~0.5 GB
+        sudo rm -rf /usr/local/share/powershell      || true  # ~1.1 GB
+        sudo rm -rf /usr/local/lib/node_modules      || true  # ~1 GB
+        sudo rm -rf /opt/microsoft                   || true
+        sudo rm -rf /opt/google                      || true
+        sudo rm -rf /opt/az                          || true
+        sudo rm -rf /usr/lib/jvm                     || true
+        sudo rm -rf /usr/local/julia*                || true
+        sudo rm -rf /usr/local/share/boost           || true
+        sudo rm -rf /usr/share/az_*                  || true
+
+        echo "Pruning Docker images..."
+        sudo docker image prune --all --force        || true
+        sudo docker builder prune -af                || true
+
+        echo "::group::Disk space AFTER cleanup"
+        df -h /
+        echo "::endgroup::"
+
     - name: Cleanup Workspace
       uses: rokibhasansagar/slimhub_actions@main
 
     - name: Set Swap Space
       uses: pierotofy/set-swap-space@master
       with:
-        swap-size-gb: 24
+        swap-size-gb: 12
 
     - name: Prepare Build Environment
       run: |
@@ -97,6 +129,10 @@ jobs:
           fi
         done
 
+        echo "Cleaning apt cache to reclaim space..."
+        sudo apt clean
+        sudo rm -rf /var/lib/apt/lists/*
+
     - name: Install repo tool
       run: |
         mkdir -p ~/bin
@@ -114,7 +150,10 @@ jobs:
 
     - name: Repo Sync
       run: |
-        repo sync -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+        repo sync -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --current-branch --optimized-fetch
+        echo "::group::Disk space after repo sync"
+        df -h /
+        echo "::endgroup::"
       working-directory: workspace
 
     - name: Clone Device Tree
@@ -228,6 +267,20 @@ jobs:
         tail -5 "${{ env.DEVICE_PATH }}/BoardConfig.mk"
         echo "--- device.mk VNDK line ---"
         grep "PRODUCT_TARGET_VNDK_VERSION" "${{ env.DEVICE_PATH }}/device.mk" || echo "not found"
+        echo "::endgroup::"
+      working-directory: workspace
+
+    - name: Reclaim Space Before Build
+      run: |
+        echo "::group::Disk space before cleanup"
+        df -h /
+        echo "::endgroup::"
+
+        echo "Removing .repo metadata to free space (no longer needed after sync)..."
+        rm -rf .repo
+
+        echo "::group::Disk space after .repo removal"
+        df -h /
         echo "::endgroup::"
       working-directory: workspace
 
