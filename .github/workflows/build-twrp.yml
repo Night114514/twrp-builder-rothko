@@ -285,6 +285,28 @@ jobs:
         echo "::endgroup::"
       working-directory: workspace
 
+    - name: Patch fscrypt_policy for libtar Compatibility
+      run: |
+        echo "::group::Patching fscrypt_policy for libtar compatibility"
+        # ----------------------------------------------------------------
+        # Fix 4: TWRP libtar on android-14.1 expects fscrypt_policy as a
+        # union type with get_policy()/fscrypt_policy_size()/etc. functions.
+        # These exist in the android-12.1 branch of system/vold but were
+        # never ported to android-14.1. Additionally, bionic defines a
+        # macro #define fscrypt_policy fscrypt_policy_v1 which clashes.
+        #
+        # Solution: Replace both fscrypt_policy.h and fscrypt_policy.cpp
+        # with the android-12.1 versions from TeamWin/android_system_vold
+        # which have the union typedef and all required functions.
+        # ----------------------------------------------------------------
+        curl -sL "https://raw.githubusercontent.com/TeamWin/android_system_vold/android-12.1/fscrypt_policy.h" \
+          > system/vold/fscrypt_policy.h
+        curl -sL "https://raw.githubusercontent.com/TeamWin/android_system_vold/android-12.1/fscrypt_policy.cpp" \
+          > system/vold/fscrypt_policy.cpp
+        echo "Replaced fscrypt_policy.h and .cpp with android-12.1 versions"
+        echo "::endgroup::"
+      working-directory: workspace
+
     - name: Reclaim Space Before Build
       run: |
         echo "::group::Disk space before cleanup"
