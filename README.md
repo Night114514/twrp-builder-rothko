@@ -1,3 +1,5 @@
+An experimental TWRP build. Untested, no guarantees, and may brick your device.
+
 # TWRP Builder for Xiaomi 14T Pro (rothko)
 
 Use GitHub Actions to automatically compile TWRP Recovery for the Xiaomi 14T Pro (codename: **rothko**).
