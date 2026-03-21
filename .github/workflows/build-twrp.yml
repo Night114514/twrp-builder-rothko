@@ -175,49 +175,47 @@ jobs:
 
         if [ ! -f "$VAB_DIR/launch.mk" ]; then
           echo "Creating launch.mk"
-          cat > "$VAB_DIR/launch.mk" << 'MKEOF'
-PRODUCT_VIRTUAL_AB_OTA := true
-MKEOF
+          echo 'PRODUCT_VIRTUAL_AB_OTA := true' > "$VAB_DIR/launch.mk"
         fi
 
         if [ ! -f "$VAB_DIR/launch_with_vendor_ramdisk.mk" ]; then
           echo "Creating launch_with_vendor_ramdisk.mk"
-          cat > "$VAB_DIR/launch_with_vendor_ramdisk.mk" << 'MKEOF'
-$(call inherit-product, $(SRC_TARGET_DIR)/product/virtual_ab_ota/launch.mk)
-PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.userspace.snapshots.enabled=true
-MKEOF
+          printf '%s\n' \
+            '$(call inherit-product, $(SRC_TARGET_DIR)/product/virtual_ab_ota/launch.mk)' \
+            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.userspace.snapshots.enabled=true' \
+            > "$VAB_DIR/launch_with_vendor_ramdisk.mk"
         fi
 
         if [ ! -f "$VAB_DIR/compression.mk" ]; then
           echo "Creating compression.mk"
-          cat > "$VAB_DIR/compression.mk" << 'MKEOF'
-$(call inherit-product, $(SRC_TARGET_DIR)/product/virtual_ab_ota/launch_with_vendor_ramdisk.mk)
-PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.enabled=true
-PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.userspace.snapshots.enabled=true
-PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.batch_writes=true
-PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.io_uring.enabled?=true
-PRODUCT_VIRTUAL_AB_COMPRESSION := true
-PRODUCT_PACKAGES += snapuserd.vendor_ramdisk snapuserd snapuserd.recovery
-MKEOF
+          printf '%s\n' \
+            '$(call inherit-product, $(SRC_TARGET_DIR)/product/virtual_ab_ota/launch_with_vendor_ramdisk.mk)' \
+            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.enabled=true' \
+            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.userspace.snapshots.enabled=true' \
+            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.batch_writes=true' \
+            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.io_uring.enabled?=true' \
+            'PRODUCT_VIRTUAL_AB_COMPRESSION := true' \
+            'PRODUCT_PACKAGES += snapuserd.vendor_ramdisk snapuserd snapuserd.recovery' \
+            > "$VAB_DIR/compression.mk"
         fi
 
         if [ ! -f "$VAB_DIR/compression_with_xor.mk" ]; then
           echo "Creating compression_with_xor.mk"
-          cat > "$VAB_DIR/compression_with_xor.mk" << 'MKEOF'
-$(call inherit-product, $(SRC_TARGET_DIR)/product/virtual_ab_ota/compression.mk)
-PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.xor.enabled=true
-MKEOF
+          printf '%s\n' \
+            '$(call inherit-product, $(SRC_TARGET_DIR)/product/virtual_ab_ota/compression.mk)' \
+            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.xor.enabled=true' \
+            > "$VAB_DIR/compression_with_xor.mk"
         fi
 
         if [ ! -f "$VAB_DIR/vabc_features.mk" ]; then
           echo "Creating vabc_features.mk"
-          cat > "$VAB_DIR/vabc_features.mk" << 'MKEOF'
-PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.enabled=true
-PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.userspace.snapshots.enabled=true
-PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.io_uring.enabled=true
-PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.xor.enabled=true
-PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.batch_writes=true
-MKEOF
+          printf '%s\n' \
+            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.enabled=true' \
+            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.userspace.snapshots.enabled=true' \
+            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.io_uring.enabled=true' \
+            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.xor.enabled=true' \
+            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.batch_writes=true' \
+            > "$VAB_DIR/vabc_features.mk"
         fi
         echo "::endgroup::"
 
