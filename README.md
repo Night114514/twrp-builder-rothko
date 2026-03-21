@@ -12,7 +12,7 @@ Use GitHub Actions to automatically compile TWRP Recovery for the Xiaomi 14T Pro
 | **Codename** | rothko |
 | **Chipset** | Mediatek Dimensity 9300+ (mt6989) |
 | **Architecture** | arm64 |
-| **Android Version** | 16 (shipped) |
+| **Android Version** | 14 (shipped) |
 | **Recovery Location** | vendor_boot partition |
 | **A/B Partition** | Yes (Virtual A/B) |
 
