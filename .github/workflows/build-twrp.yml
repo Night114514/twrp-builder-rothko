@@ -299,6 +299,37 @@ jobs:
         echo "::endgroup::"
       working-directory: workspace
 
+    - name: Create Stubs for Missing AIDL Libraries
+      run: |
+        echo "::group::Creating stub .so and .so.toc for missing ndk_platform libs"
+        # ----------------------------------------------------------------
+        # The minimal TWRP manifest does not generate all AIDL NDK
+        # platform libraries. When TW_INCLUDE_CRYPTO_FBE=true, libtar
+        # links against several android.security/system AIDL libs that
+        # are absent, causing ninja to fail at link time.
+        # Create empty stubs so the linker can proceed.
+        # ----------------------------------------------------------------
+        PRODUCT_OUT="out/target/product/${{ env.DEVICE_NAME }}"
+
+        MISSING_LIBS=(
+          android.security.apc-ndk_platform
+          android.system.keystore2-V1-ndk_platform
+          android.security.authorization-ndk_platform
+          android.security.maintenance-ndk_platform
+        )
+
+        for lib in "${MISSING_LIBS[@]}"; do
+          LIB_DIR="${PRODUCT_OUT}/obj/SHARED_LIBRARIES/${lib}_intermediates"
+          mkdir -p "$LIB_DIR"
+          # Create empty stub .so and .so.toc files
+          # ninja checks for the .so.toc at link time; an empty file satisfies it
+          touch "${LIB_DIR}/${lib}.so"
+          touch "${LIB_DIR}/${lib}.so.toc"
+          echo "Created stub for ${lib}"
+        done
+        echo "::endgroup::"
+      working-directory: workspace
+
     - name: Sync Device Dependencies
       run: |
         source build/envsetup.sh
@@ -309,6 +340,7 @@ jobs:
 
     - name: Build TWRP Recovery
       run: |
+        set -o pipefail
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
         lunch ${{ env.DEVICE_MAKEFILE }}-ap2a-eng && make $(tr -d _ <<< ${{ inputs.BUILD_TARGET }})image -j$(nproc --all) 2>&1 | tee build_log.txt
