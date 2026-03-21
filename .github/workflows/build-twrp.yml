@@ -176,6 +176,21 @@ jobs:
 
     - name: Patch Device Tree and Build System
       run: |
+        echo "::group::Patching COMMON_LUNCH_CHOICES for three-part format"
+        # ----------------------------------------------------------------
+        # Fix 0: Android 14 build system requires <product>-<release>-<variant>
+        # The device tree's AndroidProducts.mk uses old two-part format.
+        # Patch to use three-part format with ap2a release.
+        # ----------------------------------------------------------------
+        if grep -q 'COMMON_LUNCH_CHOICES' "${{ env.DEVICE_PATH }}/AndroidProducts.mk"; then
+          sed -i 's/twrp_rothko-user/twrp_rothko-ap2a-user/g' "${{ env.DEVICE_PATH }}/AndroidProducts.mk"
+          sed -i 's/twrp_rothko-userdebug/twrp_rothko-ap2a-userdebug/g' "${{ env.DEVICE_PATH }}/AndroidProducts.mk"
+          sed -i 's/twrp_rothko-eng/twrp_rothko-ap2a-eng/g' "${{ env.DEVICE_PATH }}/AndroidProducts.mk"
+          echo "Patched COMMON_LUNCH_CHOICES to three-part format"
+          cat "${{ env.DEVICE_PATH }}/AndroidProducts.mk"
+        fi
+        echo "::endgroup::"
+
         echo "::group::Patching BOARD_SYSTEMSDK_VERSIONS"
         # ----------------------------------------------------------------
         # Fix 1: BOARD_SYSTEMSDK_VERSIONS must be >= PRODUCT_SHIPPING_API_LEVEL
@@ -288,7 +303,7 @@ jobs:
       run: |
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
-        lunch ${{ env.DEVICE_MAKEFILE }}-eng
+        lunch ${{ env.DEVICE_MAKEFILE }}-ap2a-eng
       working-directory: workspace
       continue-on-error: true
 
@@ -296,7 +311,7 @@ jobs:
       run: |
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
-        lunch ${{ env.DEVICE_MAKEFILE }}-eng && make $(tr -d _ <<< ${{ inputs.BUILD_TARGET }})image -j$(nproc --all) 2>&1 | tee build_log.txt
+        lunch ${{ env.DEVICE_MAKEFILE }}-ap2a-eng && make $(tr -d _ <<< ${{ inputs.BUILD_TARGET }})image -j$(nproc --all) 2>&1 | tee build_log.txt
       working-directory: workspace
 
     - name: List Output Files
