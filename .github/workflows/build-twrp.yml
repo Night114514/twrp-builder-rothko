@@ -318,14 +318,16 @@ jobs:
           android.security.maintenance-ndk_platform
         )
 
-        for lib in "${MISSING_LIBS[@]}"; do
-          LIB_DIR="${PRODUCT_OUT}/obj/SHARED_LIBRARIES/${lib}_intermediates"
-          mkdir -p "$LIB_DIR"
-          # Create empty stub .so and .so.toc files
-          # ninja checks for the .so.toc at link time; an empty file satisfies it
-          touch "${LIB_DIR}/${lib}.so"
-          touch "${LIB_DIR}/${lib}.so.toc"
-          echo "Created stub for ${lib}"
+        # Create stubs in both obj (64-bit) and obj_arm (32-bit) dirs
+        # since the build system may use either depending on the target arch
+        for obj_dir in obj obj_arm; do
+          for lib in "${MISSING_LIBS[@]}"; do
+            LIB_DIR="${PRODUCT_OUT}/${obj_dir}/SHARED_LIBRARIES/${lib}_intermediates"
+            mkdir -p "$LIB_DIR"
+            touch "${LIB_DIR}/${lib}.so"
+            touch "${LIB_DIR}/${lib}.so.toc"
+            echo "Created stub: ${obj_dir}/${lib}"
+          done
         done
         echo "::endgroup::"
       working-directory: workspace
