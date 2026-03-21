@@ -218,7 +218,10 @@ jobs:
           echo "Patched PRODUCT_TARGET_VNDK_VERSION to current"
         fi
         echo "::endgroup::"
+      working-directory: workspace
 
+    - name: Patch fscrypt_policy for libtar Compatibility
+      run: |
         echo "::group::Checking and creating missing virtual_ab_ota makefiles"
         # ----------------------------------------------------------------
         # Fix 3: Create stub makefiles for virtual_ab_ota that the device
