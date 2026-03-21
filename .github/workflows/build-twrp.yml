@@ -114,7 +114,7 @@ jobs:
 
     - name: Repo Sync
       run: |
-        repo sync -j$(nproc --all) --force-sync
+        repo sync -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
       working-directory: workspace
 
     - name: Clone Device Tree
@@ -135,34 +135,101 @@ jobs:
         echo "::endgroup::"
       working-directory: workspace
 
-    - name: Fix Missing Build Makefiles
+    - name: Patch Device Tree and Build System
       run: |
-        echo "::group::Checking and creating missing makefiles"
-        VAB_DIR="build/make/target/product/virtual_ab_ota"
-        mkdir -p "$VAB_DIR"
-        if [ ! -f "$VAB_DIR/launch.mk" ]; then
-          echo "Creating launch.mk"
-          printf 'PRODUCT_VIRTUAL_AB_OTA := true\n' > "$VAB_DIR/launch.mk"
-        fi
-        if [ ! -f "$VAB_DIR/launch_with_vendor_ramdisk.mk" ]; then
-          echo "Creating launch_with_vendor_ramdisk.mk"
-          printf '$(call inherit-product, $(SRC_TARGET_DIR)/product/virtual_ab_ota/launch.mk)\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.userspace.snapshots.enabled=true\n' > "$VAB_DIR/launch_with_vendor_ramdisk.mk"
-        fi
-        if [ ! -f "$VAB_DIR/compression.mk" ]; then
-          echo "Creating compression.mk"
-          printf '$(call inherit-product, $(SRC_TARGET_DIR)/product/virtual_ab_ota/launch_with_vendor_ramdisk.mk)\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.enabled=true\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.userspace.snapshots.enabled=true\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.batch_writes=true\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.io_uring.enabled?=true\nPRODUCT_VIRTUAL_AB_COMPRESSION := true\nPRODUCT_PACKAGES += snapuserd.vendor_ramdisk snapuserd snapuserd.recovery\n' > "$VAB_DIR/compression.mk"
-        fi
-        if [ ! -f "$VAB_DIR/compression_with_xor.mk" ]; then
-          echo "Creating compression_with_xor.mk"
-          printf '$(call inherit-product, $(SRC_TARGET_DIR)/product/virtual_ab_ota/compression.mk)\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.xor.enabled=true\n' > "$VAB_DIR/compression_with_xor.mk"
-        fi
-        if [ ! -f "$VAB_DIR/vabc_features.mk" ]; then
-          echo "Creating vabc_features.mk"
-          printf 'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.enabled=true\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.userspace.snapshots.enabled=true\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.io_uring.enabled=true\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.xor.enabled=true\nPRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.batch_writes=true\n' > "$VAB_DIR/vabc_features.mk"
+        echo "::group::Patching BOARD_SYSTEMSDK_VERSIONS"
+        # ----------------------------------------------------------------
+        # Fix 1: BOARD_SYSTEMSDK_VERSIONS must be >= PRODUCT_SHIPPING_API_LEVEL
+        # The TWRP 14.1 minimal manifest only sets BOARD_SYSTEMSDK_VERSIONS=32,
+        # but the device tree declares PRODUCT_SHIPPING_API_LEVEL=34.
+        # ----------------------------------------------------------------
+        SHIPPING_API=$(grep -oP 'PRODUCT_SHIPPING_API_LEVEL\s*:=\s*\K[0-9]+' "${{ env.DEVICE_PATH }}/device.mk" || echo "")
+        if [ -n "$SHIPPING_API" ]; then
+          echo "" >> "${{ env.DEVICE_PATH }}/BoardConfig.mk"
+          echo "# Auto-fix: BOARD_SYSTEMSDK_VERSIONS must be >= PRODUCT_SHIPPING_API_LEVEL" >> "${{ env.DEVICE_PATH }}/BoardConfig.mk"
+          echo "BOARD_SYSTEMSDK_VERSIONS := $SHIPPING_API" >> "${{ env.DEVICE_PATH }}/BoardConfig.mk"
+          echo "Patched BOARD_SYSTEMSDK_VERSIONS to $SHIPPING_API"
+        else
+          echo "Could not extract PRODUCT_SHIPPING_API_LEVEL, skipping"
         fi
         echo "::endgroup::"
+
+        echo "::group::Patching PRODUCT_TARGET_VNDK_VERSION"
+        # ----------------------------------------------------------------
+        # Fix 2: PRODUCT_TARGET_VNDK_VERSION may be too high for twrp-14.1
+        # Replace with 'current' to avoid version mismatch
+        # ----------------------------------------------------------------
+        if grep -q "PRODUCT_TARGET_VNDK_VERSION" "${{ env.DEVICE_PATH }}/device.mk"; then
+          sed -i 's/PRODUCT_TARGET_VNDK_VERSION := .*/PRODUCT_TARGET_VNDK_VERSION := current/' "${{ env.DEVICE_PATH }}/device.mk"
+          echo "Patched PRODUCT_TARGET_VNDK_VERSION to current"
+        fi
+        echo "::endgroup::"
+
+        echo "::group::Checking and creating missing virtual_ab_ota makefiles"
+        # ----------------------------------------------------------------
+        # Fix 3: Create stub makefiles for virtual_ab_ota that the device
+        # tree references but which are absent from the minimal manifest.
+        # ----------------------------------------------------------------
+        VAB_DIR="build/make/target/product/virtual_ab_ota"
+        mkdir -p "$VAB_DIR"
+
+        if [ ! -f "$VAB_DIR/launch.mk" ]; then
+          echo "Creating launch.mk"
+          cat > "$VAB_DIR/launch.mk" << 'MKEOF'
+PRODUCT_VIRTUAL_AB_OTA := true
+MKEOF
+        fi
+
+        if [ ! -f "$VAB_DIR/launch_with_vendor_ramdisk.mk" ]; then
+          echo "Creating launch_with_vendor_ramdisk.mk"
+          cat > "$VAB_DIR/launch_with_vendor_ramdisk.mk" << 'MKEOF'
+$(call inherit-product, $(SRC_TARGET_DIR)/product/virtual_ab_ota/launch.mk)
+PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.userspace.snapshots.enabled=true
+MKEOF
+        fi
+
+        if [ ! -f "$VAB_DIR/compression.mk" ]; then
+          echo "Creating compression.mk"
+          cat > "$VAB_DIR/compression.mk" << 'MKEOF'
+$(call inherit-product, $(SRC_TARGET_DIR)/product/virtual_ab_ota/launch_with_vendor_ramdisk.mk)
+PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.enabled=true
+PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.userspace.snapshots.enabled=true
+PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.batch_writes=true
+PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.io_uring.enabled?=true
+PRODUCT_VIRTUAL_AB_COMPRESSION := true
+PRODUCT_PACKAGES += snapuserd.vendor_ramdisk snapuserd snapuserd.recovery
+MKEOF
+        fi
+
+        if [ ! -f "$VAB_DIR/compression_with_xor.mk" ]; then
+          echo "Creating compression_with_xor.mk"
+          cat > "$VAB_DIR/compression_with_xor.mk" << 'MKEOF'
+$(call inherit-product, $(SRC_TARGET_DIR)/product/virtual_ab_ota/compression.mk)
+PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.xor.enabled=true
+MKEOF
+        fi
+
+        if [ ! -f "$VAB_DIR/vabc_features.mk" ]; then
+          echo "Creating vabc_features.mk"
+          cat > "$VAB_DIR/vabc_features.mk" << 'MKEOF'
+PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.enabled=true
+PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.userspace.snapshots.enabled=true
+PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.io_uring.enabled=true
+PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.xor.enabled=true
+PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.batch_writes=true
+MKEOF
+        fi
+        echo "::endgroup::"
+
         echo "::group::Listing virtual_ab_ota directory"
         ls -la "$VAB_DIR/"
+        echo "::endgroup::"
+
+        echo "::group::Verifying patches"
+        echo "--- BoardConfig.mk tail ---"
+        tail -5 "${{ env.DEVICE_PATH }}/BoardConfig.mk"
+        echo "--- device.mk VNDK line ---"
+        grep "PRODUCT_TARGET_VNDK_VERSION" "${{ env.DEVICE_PATH }}/device.mk" || echo "not found"
         echo "::endgroup::"
       working-directory: workspace
 
@@ -178,7 +245,7 @@ jobs:
       run: |
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
-        lunch ${{ env.DEVICE_MAKEFILE }}-eng && make $(tr -d _ <<< ${{ inputs.BUILD_TARGET }})image -j$(nproc --all)
+        lunch ${{ env.DEVICE_MAKEFILE }}-eng && make $(tr -d _ <<< ${{ inputs.BUILD_TARGET }})image -j$(nproc --all) 2>&1 | tee build_log.txt
       working-directory: workspace
 
     - name: List Output Files
@@ -188,6 +255,14 @@ jobs:
         find out/target/product/${{ env.DEVICE_NAME }}/ -maxdepth 1 \( -name "*.img" -o -name "*.zip" \) 2>/dev/null || echo "No output files found"
         echo "::endgroup::"
       working-directory: workspace
+
+    - name: Upload Build Log
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-log
+        path: workspace/build_log.txt
+        retention-days: 7
 
     - name: Upload to Release
       uses: softprops/action-gh-release@v2
