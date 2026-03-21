@@ -1,4 +1,4 @@
-An experimental TWRP build. Untested, no guarantees, and may brick your device.
+⚠️ WARNING: This TWRP was compiled blindly. Functionality is not guaranteed, and flashing it carries a high risk of bricking.
 
 # TWRP Builder for Xiaomi 14T Pro (rothko)
 
