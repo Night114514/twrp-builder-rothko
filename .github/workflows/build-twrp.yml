@@ -86,10 +86,10 @@ jobs:
           echo "::endgroup::"
 
       - name: Cleanup Workspace
-        uses: rokibhasansagar/slimhub_actions@v1
+        uses: rokibhasansagar/slimhub_actions@main
 
       - name: Set Swap Space
-        uses: pierotofy/set-swap-space@v1.0.1
+        uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 12
 
@@ -151,27 +151,39 @@ jobs:
             exit 0
           fi
 
-          python3 - <<'PY2'
-import json, subprocess
+          DEPS_FILE="$DEPS_FILE" python3 - <<'PY2'
+import json, os, subprocess
 from pathlib import Path
 
-deps_file = Path('device/xiaomi/rothko/twrp.dependencies')
+deps_file = Path(os.environ['DEPS_FILE'])
 workspace = Path.cwd()
 with deps_file.open() as f:
     deps = json.load(f)
 
+if not isinstance(deps, list):
+    raise RuntimeError(f"Expected a list in {deps_file}, got {type(deps).__name__}")
+
 for dep in deps:
+    if not isinstance(dep, dict):
+        continue
     repo = dep.get('repository')
     target = dep.get('target_path')
-    branch = dep.get('branch') or 'master'
+    branch = dep.get('branch') or os.environ.get('DEVICE_TREE_BRANCH', 'master')
     if not repo or not target:
+        print(f"[skip] invalid dependency entry: {dep}")
         continue
+
     dest = workspace / target
     if dest.exists():
         print(f"[skip] {target} already exists")
         continue
+
     dest.parent.mkdir(parents=True, exist_ok=True)
-    url = repo if repo.startswith('http') else f"https://github.com/{repo}"
+    if repo.startswith(('https://', 'http://', 'ssh://', 'git@')):
+        url = repo
+    else:
+        url = f"https://github.com/{repo}"
+
     print(f"[clone] {url} -b {branch} -> {target}")
     subprocess.check_call(['git', 'clone', '--depth=1', '-b', branch, url, str(dest)])
 PY2
