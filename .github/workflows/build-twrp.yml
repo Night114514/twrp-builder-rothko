@@ -5,20 +5,20 @@ on:
     inputs:
       MANIFEST_BRANCH:
         type: choice
-        description: 'TWRP Manifest Branch'
+        description: TWRP Manifest Branch
         options:
-        - '14.1'
+          - '14.1'
         required: true
         default: '14.1'
       BUILD_TARGET:
         type: choice
-        description: 'Build Target Partition'
+        description: Build Target Partition
         options:
-        - vendor_boot
-        - boot
-        - recovery
+          - vendor_boot
+          - boot
+          - recovery
         required: true
-        default: 'vendor_boot'
+        default: vendor_boot
 
 jobs:
   build:
@@ -34,383 +34,217 @@ jobs:
       DEVICE_MAKEFILE: twrp_rothko
 
     steps:
-    - name: Display Build Parameters
-      run: |
-        echo "::group::Build Configuration"
-        echo "Manifest Branch: twrp-${{ inputs.MANIFEST_BRANCH }}"
-        echo "Device Tree URL: ${{ env.DEVICE_TREE_URL }}"
-        echo "Device Tree Branch: ${{ env.DEVICE_TREE_BRANCH }}"
-        echo "Device Path: ${{ env.DEVICE_PATH }}"
-        echo "Device Name: ${{ env.DEVICE_NAME }}"
-        echo "Build Target: ${{ inputs.BUILD_TARGET }}.img"
-        echo "::endgroup::"
+      - name: Check Out Repository
+        uses: actions/checkout@v4
 
-    - name: Validate Manifest / Device Tree Compatibility
-      run: |
-        if [[ "${{ inputs.MANIFEST_BRANCH }}" != "14.1" ]]; then
-          echo "This workflow currently supports MANIFEST_BRANCH=14.1 only."
-          echo "Selected: ${{ inputs.MANIFEST_BRANCH }}"
-          echo "DEVICE_TREE_BRANCH=${{ env.DEVICE_TREE_BRANCH }} requires Android 14.1 trees."
-          exit 1
-        fi
+      - name: Display Build Parameters
+        run: |
+          echo "::group::Build Configuration"
+          echo "Manifest Branch: twrp-${{ inputs.MANIFEST_BRANCH }}"
+          echo "Device Tree URL: ${{ env.DEVICE_TREE_URL }}"
+          echo "Device Tree Branch: ${{ env.DEVICE_TREE_BRANCH }}"
+          echo "Device Path: ${{ env.DEVICE_PATH }}"
+          echo "Device Name: ${{ env.DEVICE_NAME }}"
+          echo "Build Target: ${{ inputs.BUILD_TARGET }}.img"
+          echo "::endgroup::"
 
-    - name: Check Out Repository
-      uses: actions/checkout@v4
-
-    - name: Free Disk Space
-      run: |
-        echo "::group::Disk space BEFORE cleanup"
-        df -h /
-        echo "::endgroup::"
-
-        echo "Removing unwanted pre-installed software..."
-        sudo rm -rf /usr/local/lib/android          || true  # ~9 GB
-        sudo rm -rf /usr/share/dotnet                || true  # ~1.5 GB
-        sudo rm -rf /usr/local/.ghcup                || true  # ~5.4 GB (Haskell)
-        sudo rm -rf /opt/hostedtoolcache             || true  # ~9 GB
-        sudo rm -rf /usr/share/swift                 || true  # ~1.8 GB
-        sudo rm -rf /usr/share/miniconda             || true  # ~0.6 GB
-        sudo rm -rf /usr/local/share/chromium        || true  # ~0.5 GB
-        sudo rm -rf /usr/local/share/powershell      || true  # ~1.1 GB
-        sudo rm -rf /usr/local/lib/node_modules      || true  # ~1 GB
-        sudo rm -rf /opt/microsoft                   || true
-        sudo rm -rf /opt/google                      || true
-        sudo rm -rf /opt/az                          || true
-        sudo rm -rf /usr/lib/jvm                     || true
-        sudo rm -rf /usr/local/julia*                || true
-        sudo rm -rf /usr/local/share/boost           || true
-        sudo rm -rf /usr/share/az_*                  || true
-
-        echo "Pruning Docker images..."
-        sudo docker image prune --all --force        || true
-        sudo docker builder prune -af                || true
-
-        echo "::group::Disk space AFTER cleanup"
-        df -h /
-        echo "::endgroup::"
-
-    - name: Cleanup Workspace
-      uses: rokibhasansagar/slimhub_actions@main
-
-    - name: Set Swap Space
-      uses: pierotofy/set-swap-space@master
-      with:
-        swap-size-gb: 12
-
-    - name: Prepare Build Environment
-      run: |
-        sudo add-apt-repository -y universe
-        sudo apt update
-
-        REQUIRED_PACKAGES=(
-          gperf gcc-multilib gcc-12-multilib g++-multilib g++-12-multilib
-          libc6-dev x11proto-core-dev libx11-dev tree
-          lib32z-dev libgl1-mesa-dev libxml2-utils xsltproc bc ccache
-          lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev
-          libsdl1.2-dev libxml2 lzop pngcrush schedtool squashfs-tools
-          imagemagick libbz2-dev lzma ncftp qemu-user-static
-          libstdc++-12-dev python3 python-is-python3 zip unzip
-          bison build-essential curl flex git gnupg rsync zlib1g-dev
-        )
-
-        OPTIONAL_PACKAGES=(
-          lib32ncurses5-dev
-          libtinfo5
-          libncurses5
-        )
-
-        sudo apt -y install "${REQUIRED_PACKAGES[@]}"
-
-        for pkg in "${OPTIONAL_PACKAGES[@]}"; do
-          if apt-cache show "$pkg" >/dev/null 2>&1; then
-            sudo apt -y install "$pkg"
-          else
-            echo "Package $pkg is unavailable on this runner image, skipping"
+      - name: Validate Manifest Compatibility
+        run: |
+          if [[ "${{ inputs.MANIFEST_BRANCH }}" != "14.1" ]]; then
+            echo "This workflow currently supports MANIFEST_BRANCH=14.1 only."
+            exit 1
           fi
-        done
 
-        echo "Cleaning apt cache to reclaim space..."
-        sudo apt clean
-        sudo rm -rf /var/lib/apt/lists/*
+      - name: Free Disk Space
+        run: |
+          echo "::group::Disk space BEFORE cleanup"
+          df -h /
+          echo "::endgroup::"
 
-    - name: Install repo tool
-      run: |
-        mkdir -p ~/bin
-        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
-        chmod a+x ~/bin/repo
-        sudo ln -sf ~/bin/repo /usr/bin/repo
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /usr/local/.ghcup || true
+          sudo rm -rf /opt/hostedtoolcache || true
+          sudo rm -rf /usr/share/swift || true
+          sudo rm -rf /usr/share/miniconda || true
+          sudo rm -rf /usr/local/share/chromium || true
+          sudo rm -rf /usr/local/share/powershell || true
+          sudo rm -rf /usr/local/lib/node_modules || true
+          sudo rm -rf /opt/microsoft || true
+          sudo rm -rf /opt/google || true
+          sudo rm -rf /opt/az || true
+          sudo rm -rf /usr/lib/jvm || true
+          sudo rm -rf /usr/local/julia* || true
+          sudo rm -rf /usr/local/share/boost || true
+          sudo rm -rf /usr/share/az_* || true
 
-    - name: Initialize TWRP Manifest
-      run: |
-        mkdir workspace
-        cd workspace
-        git config --global user.name "${GITHUB_ACTOR}"
-        git config --global user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
-        repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git -b twrp-${{ inputs.MANIFEST_BRANCH }}
+          sudo docker image prune --all --force || true
+          sudo docker builder prune -af || true
 
-    - name: Repo Sync
-      run: |
-        repo sync -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --current-branch --optimized-fetch
-        echo "::group::Disk space after repo sync"
-        df -h /
-        echo "::endgroup::"
-      working-directory: workspace
+          echo "::group::Disk space AFTER cleanup"
+          df -h /
+          echo "::endgroup::"
 
-    - name: Clone Device Tree
-      run: |
-        git clone ${{ env.DEVICE_TREE_URL }} -b ${{ env.DEVICE_TREE_BRANCH }} ./${{ env.DEVICE_PATH }}
-      working-directory: workspace
+      - name: Cleanup Workspace
+        uses: rokibhasansagar/slimhub_actions@v1
 
-    - name: Check Device Tree
-      run: |
-        echo "::group::Device Tree Files"
-        ls -la ${{ env.DEVICE_PATH }}/
-        echo "::endgroup::"
-        echo "::group::BoardConfig.mk"
-        cat ${{ env.DEVICE_PATH }}/BoardConfig.mk
-        echo "::endgroup::"
-        echo "::group::device.mk"
-        cat ${{ env.DEVICE_PATH }}/device.mk
-        echo "::endgroup::"
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@v1.0.1
+        with:
+          swap-size-gb: 12
 
-        echo "::group::Patching COMMON_LUNCH_CHOICES for three-part format"
-        # ----------------------------------------------------------------
-        # Fix 0: Android 14 build system requires <product>-<release>-<variant>
-        # The device tree's AndroidProducts.mk uses old two-part format.
-        # Patch to use three-part format with ap2a release.
-        # ----------------------------------------------------------------
-        if grep -q 'COMMON_LUNCH_CHOICES' "${{ env.DEVICE_PATH }}/AndroidProducts.mk"; then
-          sed -i 's/twrp_rothko-user/twrp_rothko-ap2a-user/g' "${{ env.DEVICE_PATH }}/AndroidProducts.mk"
-          sed -i 's/twrp_rothko-userdebug/twrp_rothko-ap2a-userdebug/g' "${{ env.DEVICE_PATH }}/AndroidProducts.mk"
-          sed -i 's/twrp_rothko-eng/twrp_rothko-ap2a-eng/g' "${{ env.DEVICE_PATH }}/AndroidProducts.mk"
-          echo "Patched COMMON_LUNCH_CHOICES to three-part format"
-          cat "${{ env.DEVICE_PATH }}/AndroidProducts.mk"
-        fi
-        echo "::endgroup::"
+      - name: Prepare Build Environment
+        run: |
+          sudo add-apt-repository -y universe
+          sudo apt update
+          sudo apt -y install \
+            gperf gcc-multilib gcc-12-multilib g++-multilib g++-12-multilib \
+            libc6-dev x11proto-core-dev libx11-dev tree \
+            lib32z-dev libgl1-mesa-dev libxml2-utils xsltproc bc ccache \
+            lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev \
+            libsdl1.2-dev libxml2 lzop pngcrush schedtool squashfs-tools \
+            imagemagick libbz2-dev lzma ncftp qemu-user-static \
+            libstdc++-12-dev python3 python-is-python3 zip unzip \
+            bison build-essential curl flex git gnupg rsync zlib1g-dev
 
-        echo "::group::Patching BOARD_SYSTEMSDK_VERSIONS"
-        # ----------------------------------------------------------------
-        # Fix 1: BOARD_SYSTEMSDK_VERSIONS must be >= PRODUCT_SHIPPING_API_LEVEL
-        # The TWRP 14.1 minimal manifest only sets BOARD_SYSTEMSDK_VERSIONS=32,
-        # but the device tree declares PRODUCT_SHIPPING_API_LEVEL=34.
-        # ----------------------------------------------------------------
-        SHIPPING_API=$(grep -oP 'PRODUCT_SHIPPING_API_LEVEL\s*:=\s*\K[0-9]+' "${{ env.DEVICE_PATH }}/device.mk" || echo "")
-        if [ -n "$SHIPPING_API" ]; then
-          echo "" >> "${{ env.DEVICE_PATH }}/BoardConfig.mk"
-          echo "# Auto-fix: BOARD_SYSTEMSDK_VERSIONS must be >= PRODUCT_SHIPPING_API_LEVEL" >> "${{ env.DEVICE_PATH }}/BoardConfig.mk"
-          echo "BOARD_SYSTEMSDK_VERSIONS := $SHIPPING_API" >> "${{ env.DEVICE_PATH }}/BoardConfig.mk"
-          echo "Patched BOARD_SYSTEMSDK_VERSIONS to $SHIPPING_API"
-        else
-          echo "Could not extract PRODUCT_SHIPPING_API_LEVEL, skipping"
-        fi
-        echo "::endgroup::"
+      - name: Install repo tool
+        run: |
+          mkdir -p ~/bin
+          curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o ~/bin/repo
+          chmod a+x ~/bin/repo
+          sudo ln -sf ~/bin/repo /usr/bin/repo
 
-        echo "::group::Patching PRODUCT_TARGET_VNDK_VERSION"
-        # ----------------------------------------------------------------
-        # Fix 2: PRODUCT_TARGET_VNDK_VERSION may be too high for twrp-14.1
-        # Replace with 'current' to avoid version mismatch
-        # ----------------------------------------------------------------
-        if grep -q "PRODUCT_TARGET_VNDK_VERSION" "${{ env.DEVICE_PATH }}/device.mk"; then
-          sed -i 's/PRODUCT_TARGET_VNDK_VERSION := .*/PRODUCT_TARGET_VNDK_VERSION := current/' "${{ env.DEVICE_PATH }}/device.mk"
-          echo "Patched PRODUCT_TARGET_VNDK_VERSION to current"
-        fi
-        echo "::endgroup::"
+      - name: Initialize TWRP Manifest
+        run: |
+          mkdir workspace
+          cd workspace
+          git config --global user.name "${GITHUB_ACTOR}"
+          git config --global user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+          repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git -b twrp-${{ inputs.MANIFEST_BRANCH }}
 
-        echo "::group::Checking and creating missing virtual_ab_ota makefiles"
-        # ----------------------------------------------------------------
-        # Fix 3: Create stub makefiles for virtual_ab_ota that the device
-        # tree references but which are absent from the minimal manifest.
-        # ----------------------------------------------------------------
-        VAB_DIR="build/make/target/product/virtual_ab_ota"
-        mkdir -p "$VAB_DIR"
+      - name: Repo Sync
+        working-directory: workspace
+        run: |
+          repo sync -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --current-branch --optimized-fetch
 
-        if [ ! -f "$VAB_DIR/launch.mk" ]; then
-          echo "Creating launch.mk"
-          echo 'PRODUCT_VIRTUAL_AB_OTA := true' > "$VAB_DIR/launch.mk"
-        fi
+      - name: Clone Device Tree
+        working-directory: workspace
+        run: |
+          git clone ${{ env.DEVICE_TREE_URL }} -b ${{ env.DEVICE_TREE_BRANCH }} ./${{ env.DEVICE_PATH }}
 
-        if [ ! -f "$VAB_DIR/launch_with_vendor_ramdisk.mk" ]; then
-          echo "Creating launch_with_vendor_ramdisk.mk"
-          printf '%s\n' \
-            '$(call inherit-product, $(SRC_TARGET_DIR)/product/virtual_ab_ota/launch.mk)' \
-            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.userspace.snapshots.enabled=true' \
-            > "$VAB_DIR/launch_with_vendor_ramdisk.mk"
-        fi
+      - name: Patch Lunch Combo to Android 14 Format
+        working-directory: workspace
+        run: |
+          if grep -q 'COMMON_LUNCH_CHOICES' "${{ env.DEVICE_PATH }}/AndroidProducts.mk"; then
+            sed -i 's/twrp_rothko-user/twrp_rothko-ap2a-user/g' "${{ env.DEVICE_PATH }}/AndroidProducts.mk"
+            sed -i 's/twrp_rothko-userdebug/twrp_rothko-ap2a-userdebug/g' "${{ env.DEVICE_PATH }}/AndroidProducts.mk"
+            sed -i 's/twrp_rothko-eng/twrp_rothko-ap2a-eng/g' "${{ env.DEVICE_PATH }}/AndroidProducts.mk"
+          fi
 
-        if [ ! -f "$VAB_DIR/compression.mk" ]; then
-          echo "Creating compression.mk"
-          printf '%s\n' \
-            '$(call inherit-product, $(SRC_TARGET_DIR)/product/virtual_ab_ota/launch_with_vendor_ramdisk.mk)' \
-            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.enabled=true' \
-            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.userspace.snapshots.enabled=true' \
-            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.batch_writes=true' \
-            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.io_uring.enabled?=true' \
-            'PRODUCT_VIRTUAL_AB_COMPRESSION := true' \
-            'PRODUCT_PACKAGES += snapuserd.vendor_ramdisk snapuserd snapuserd.recovery' \
-            > "$VAB_DIR/compression.mk"
-        fi
 
-        if [ ! -f "$VAB_DIR/compression_with_xor.mk" ]; then
-          echo "Creating compression_with_xor.mk"
-          printf '%s\n' \
-            '$(call inherit-product, $(SRC_TARGET_DIR)/product/virtual_ab_ota/compression.mk)' \
-            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.xor.enabled=true' \
-            > "$VAB_DIR/compression_with_xor.mk"
-        fi
+      - name: Sync Extra Dependencies from twrp.dependencies
+        working-directory: workspace
+        run: |
+          DEPS_FILE="${{ env.DEVICE_PATH }}/twrp.dependencies"
+          if [ ! -f "$DEPS_FILE" ]; then
+            echo "No twrp.dependencies found, skipping extra dependency sync"
+            exit 0
+          fi
 
-        if [ ! -f "$VAB_DIR/vabc_features.mk" ]; then
-          echo "Creating vabc_features.mk"
-          printf '%s\n' \
-            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.enabled=true' \
-            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.userspace.snapshots.enabled=true' \
-            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.io_uring.enabled=true' \
-            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.xor.enabled=true' \
-            'PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.batch_writes=true' \
-            > "$VAB_DIR/vabc_features.mk"
-        fi
-        echo "::endgroup::"
+          python3 - <<'PY2'
+import json, subprocess
+from pathlib import Path
 
-        echo "::group::Listing virtual_ab_ota directory"
-        ls -la "$VAB_DIR/"
-        echo "::endgroup::"
+deps_file = Path('device/xiaomi/rothko/twrp.dependencies')
+workspace = Path.cwd()
+with deps_file.open() as f:
+    deps = json.load(f)
 
-        echo "::group::Verifying patches"
-        echo "--- BoardConfig.mk tail ---"
-        tail -5 "${{ env.DEVICE_PATH }}/BoardConfig.mk"
-        echo "--- device.mk VNDK line ---"
-        grep "PRODUCT_TARGET_VNDK_VERSION" "${{ env.DEVICE_PATH }}/device.mk" || echo "not found"
-        echo "::endgroup::"
-      working-directory: workspace
+for dep in deps:
+    repo = dep.get('repository')
+    target = dep.get('target_path')
+    branch = dep.get('branch') or 'master'
+    if not repo or not target:
+        continue
+    dest = workspace / target
+    if dest.exists():
+        print(f"[skip] {target} already exists")
+        continue
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    url = repo if repo.startswith('http') else f"https://github.com/{repo}"
+    print(f"[clone] {url} -b {branch} -> {target}")
+    subprocess.check_call(['git', 'clone', '--depth=1', '-b', branch, url, str(dest)])
+PY2
 
-    - name: Patch fscrypt_policy for libtar Compatibility
-      run: |
-        echo "::group::Patching TWRP libtar fscrypt compatibility"
-        # Fix: TWRP bootable/recovery's libtar uses old fscrypt_policy union typedef.
-        # Instead of replacing vold files (which breaks Decrypt.cpp),
-        # add a compatibility shim to system/extras/libfscrypt include path.
-        # The correct fix is to disable FBE crypto in the build to avoid the issue.
-        if grep -q "TW_INCLUDE_CRYPTO_FBE" "${{ env.DEVICE_PATH }}/BoardConfig.mk"; then
-          echo "TW_INCLUDE_CRYPTO_FBE already set in BoardConfig.mk"
-        else
-        # Check if crypto is needed; for testing builds, disable FBE to unblock compilation
-        echo "" >> "${{ env.DEVICE_PATH }}/BoardConfig.mk"
-        echo "# Disable FBE crypto to avoid fscrypt_policy API mismatch between twrp-14.1 libtar and vold" >> "${{ env.DEVICE_PATH }}/BoardConfig.mk"
-        echo "TW_INCLUDE_CRYPTO_FBE := false" >> "${{ env.DEVICE_PATH }}/BoardConfig.mk"
-        echo "Patched: disabled TW_INCLUDE_CRYPTO_FBE to bypass fscrypt_policy build error"
-        fi
-        echo "::endgroup::"
-              working-directory: workspace
-        
-            - name: Patch fscrypt_policy for libtar Compatibility
-              run: |
-        echo "::group::Patching fscrypt_policy for libtar compatibility"
-        # ----------------------------------------------------------------
-        # Fix 4: TWRP libtar on android-14.1 expects fscrypt_policy as a
-        # union type with get_policy()/fscrypt_policy_size()/etc. functions.
-        # These exist in the android-12.1 branch of system/vold but were
-        # never ported to android-14.1. Additionally, bionic defines a
-        # macro #define fscrypt_policy fscrypt_policy_v1 which clashes.
-        #
-        # Solution: Replace both fscrypt_policy.h and fscrypt_policy.cpp
-        # with the android-12.1 versions from TeamWin/android_system_vold
-        # which have the union typedef and all required functions.
-        # ----------------------------------------------------------------
-        curl -sL "https://raw.githubusercontent.com/TeamWin/android_system_vold/android-12.1/fscrypt_policy.h" \
-          > system/vold/fscrypt_policy.h
-        curl -sL "https://raw.githubusercontent.com/TeamWin/android_system_vold/android-12.1/fscrypt_policy.cpp" \
-          > system/vold/fscrypt_policy.cpp
-        echo "Replaced fscrypt_policy.h and .cpp with android-12.1 versions"
-        echo "::endgroup::"
-      working-directory: workspace
+      - name: Verify Device Product Definition
+        working-directory: workspace
+        run: |
+          test -f "${{ env.DEVICE_PATH }}/AndroidProducts.mk"
+          grep -E "twrp_rothko-ap2a-(eng|userdebug|user)" "${{ env.DEVICE_PATH }}/AndroidProducts.mk"
 
-    - name: Create Stubs for Missing AIDL Libraries
-      run: |
-        echo "::group::Creating stub .so and .so.toc for missing ndk_platform libs"
-        # ----------------------------------------------------------------
-        # The minimal TWRP manifest does not generate all AIDL NDK
-        # platform libraries. When TW_INCLUDE_CRYPTO_FBE=true, libtar
-        # links against several android.security/system AIDL libs that
-        # are absent, causing ninja to fail at link time.
-        # Create empty stubs so the linker can proceed.
-        # ----------------------------------------------------------------
-        PRODUCT_OUT="out/target/product/${{ env.DEVICE_NAME }}"
+      - name: Sync Device Dependencies
+        working-directory: workspace
+        continue-on-error: true
+        run: |
+          source build/envsetup.sh
+          export ALLOW_MISSING_DEPENDENCIES=true
+          lunch ${{ env.DEVICE_MAKEFILE }}-ap2a-eng
 
-        MISSING_LIBS=(
-          android.security.apc-ndk_platform
-          android.system.keystore2-V1-ndk_platform
-          android.security.authorization-ndk_platform
-          android.security.maintenance-ndk_platform
-        )
+      - name: Build TWRP Recovery
+        working-directory: workspace
+        run: |
+          set -o pipefail
+          source build/envsetup.sh
+          export ALLOW_MISSING_DEPENDENCIES=true
+          lunch ${{ env.DEVICE_MAKEFILE }}-ap2a-eng
+          make $(tr -d _ <<< ${{ inputs.BUILD_TARGET }})image -j$(nproc --all) 2>&1 | tee build_log.txt
 
-        # Create stubs in both obj (64-bit) and obj_arm (32-bit) dirs
-        # since the build system may use either depending on the target arch
-        for obj_dir in obj obj_arm; do
-          for lib in "${MISSING_LIBS[@]}"; do
-            LIB_DIR="${PRODUCT_OUT}/${obj_dir}/SHARED_LIBRARIES/${lib}_intermediates"
-            mkdir -p "$LIB_DIR"
-            touch "${LIB_DIR}/${lib}.so"
-            touch "${LIB_DIR}/${lib}.so.toc"
-            echo "Created stub: ${obj_dir}/${lib}"
-          done
-        done
-        echo "::endgroup::"
-      working-directory: workspace
+      - name: Validate Output Image
+        working-directory: workspace
+        run: |
+          IMG="out/target/product/${{ env.DEVICE_NAME }}/${{ inputs.BUILD_TARGET }}.img"
+          if [ ! -f "$IMG" ]; then
+            echo "Missing output image: $IMG"
+            exit 1
+          fi
+          SIZE=$(stat -c%s "$IMG")
+          echo "Output size: $SIZE bytes"
+          if [ "$SIZE" -lt 10485760 ]; then
+            echo "Image too small; likely invalid build artifact"
+            exit 1
+          fi
 
-    - name: Sync Device Dependencies
-      run: |
-        source build/envsetup.sh
-        export ALLOW_MISSING_DEPENDENCIES=true
-        lunch ${{ env.DEVICE_MAKEFILE }}-ap2a-eng
-      working-directory: workspace
-      continue-on-error: true
+      - name: List Output Files
+        if: always()
+        working-directory: workspace
+        run: |
+          find out/target/product/${{ env.DEVICE_NAME }}/ -maxdepth 1 \( -name "*.img" -o -name "*.zip" \)
 
-    - name: Build TWRP Recovery
-      run: |
-        set -o pipefail
-        source build/envsetup.sh
-        export ALLOW_MISSING_DEPENDENCIES=true
-        lunch ${{ env.DEVICE_MAKEFILE }}-ap2a-eng && make $(tr -d _ <<< ${{ inputs.BUILD_TARGET }})image -j$(nproc --all) 2>&1 | tee build_log.txt
-      working-directory: workspace
+      - name: Upload Build Log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: workspace/build_log.txt
+          retention-days: 7
 
-    - name: List Output Files
-      if: always()
-      run: |
-        echo "::group::Output Files"
-        find out/target/product/${{ env.DEVICE_NAME }}/ -maxdepth 1 \( -name "*.img" -o -name "*.zip" \) 2>/dev/null || echo "No output files found"
-        echo "::endgroup::"
-      working-directory: workspace
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          fail_on_unmatched_files: false
+          files: |
+            workspace/out/target/product/${{ env.DEVICE_NAME }}/${{ inputs.BUILD_TARGET }}.img
+            workspace/out/target/product/${{ env.DEVICE_NAME }}/obj/PACKAGING/vendor_ramdisk_fragments_intermediates/recovery.*
+            workspace/out/target/product/${{ env.DEVICE_NAME }}/ramdisk-recovery.*
+          name: TWRP-${{ env.DEVICE_NAME }}-${{ github.run_id }}
+          tag_name: ${{ github.run_id }}
+          body: |
+            ## TWRP Recovery for Xiaomi 14T Pro (rothko)
 
-    - name: Upload Build Log
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-log
-        path: workspace/build_log.txt
-        retention-days: 7
-
-    - name: Upload to Release
-      uses: softprops/action-gh-release@v2
-      with:
-        fail_on_unmatched_files: false
-        files: |
-          workspace/out/target/product/${{ env.DEVICE_NAME }}/${{ inputs.BUILD_TARGET }}.img
-          workspace/out/target/product/${{ env.DEVICE_NAME }}/obj/PACKAGING/vendor_ramdisk_fragments_intermediates/recovery.*
-          workspace/out/target/product/${{ env.DEVICE_NAME }}/ramdisk-recovery.*
-        name: TWRP-${{ env.DEVICE_NAME }}-${{ github.run_id }}
-        tag_name: ${{ github.run_id }}
-        body: |
-          ## TWRP Recovery for Xiaomi 14T Pro (rothko)
-
-          **Build Info:**
-          - Manifest Branch: twrp-${{ inputs.MANIFEST_BRANCH }}
-          - Device Tree: ${{ env.DEVICE_TREE_URL }}
-          - Device Tree Branch: ${{ env.DEVICE_TREE_BRANCH }}
-          - Build Target: ${{ inputs.BUILD_TARGET }}.img
-          - Build Date: ${{ github.event.repository.updated_at }}
-
-          **Flash Instructions:**
-          ```
-          fastboot flash vendor_boot vendor_boot.img
-          ```
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            **Build Info:**
+            - Manifest Branch: twrp-${{ inputs.MANIFEST_BRANCH }}
+            - Device Tree: ${{ env.DEVICE_TREE_URL }}
+            - Device Tree Branch: ${{ env.DEVICE_TREE_BRANCH }}
+            - Build Target: ${{ inputs.BUILD_TARGET }}.img
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
