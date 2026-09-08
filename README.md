@@ -1,3 +1,5 @@
+use this : https://sourceforge.net/projects/recovery-for-xiaomi-devices/files/rothko/
+
 ⚠️ WARNING: This TWRP was compiled blindly. Functionality is not guaranteed, and flashing it carries a high risk of bricking.
 
 # TWRP Builder for Xiaomi 14T Pro (rothko)
